@@ -78,17 +78,34 @@ except ImportError:
 
 # Import project source files
 import iocp
-from iocp import Output
+import Output
 
 class Parser(object):
 	patterns = {}
 	defang = {}
+	matchFound = False
 
-	def __init__(self, patterns_ini=None, input_format='pdf', dedup=False, library='pdfminer', output_format='csv', output_handler=None):
+	def __init__(self, patterns_ini=None, input_format='pdf', dedup=False, library='pdfminer', output_format='csv', sort=False, target_dir=None, path=None, output_handler=None):
+
+		self.path = os.path.abspath(path)
+		self.sort = sort
+				
+		if self.sort:
+			self.target_dir = os.path.abspath(target_dir)
+			if os.path.exists(self.target_dir):
+				print "[*] Target directory: " + self.target_dir
+			else:
+				print "[+] Creating " + target_dir + " to store sorted PDFs."				
+				os.makedirs(self.target_dir)
+
+
 		basedir = iocp.get_basedir()
 
 		if patterns_ini is None:
 			patterns_ini = os.path.join(basedir, 'data/patterns.ini')
+		else:
+			patterns_ini = os.path.abspath(patterns_ini)
+
 		self.load_patterns(patterns_ini)
 
 		wldir = os.path.join(basedir, 'data/whitelists')
@@ -163,8 +180,14 @@ class Parser(object):
 		return False
 
 	def parse_page(self, fpath, data, page_num):
+
 		for ind_type, ind_regex in self.patterns.items():
 			matches = ind_regex.findall(data)
+
+			if self.sort:
+				# if match exists, set matchFound to be true
+				if matches:
+					self.matchFound = True
 
 			for ind_match in matches:
 				if isinstance(ind_match, tuple):
@@ -181,12 +204,16 @@ class Parser(object):
 						continue
 
 					self.dedup_store.add((ind_type, ind_match))
-
-				self.handler.print_match(fpath, page_num, ind_type, ind_match)
+				
+				if not self.sort:
+					# if sorting, omit printing of matches
+					self.handler.print_match(fpath, page_num, ind_type, ind_match)
 
 	def parse_pdf_pypdf2(self, f, fpath):
 		try:
 			pdf = PdfFileReader(f, strict = False)
+			if pdf.isEncrypted:
+    				pdf.decrypt('')
 
 			if self.dedup:
 				self.dedup_store = set()
@@ -202,6 +229,29 @@ class Parser(object):
 			self.handler.print_footer(fpath)
 		except (KeyboardInterrupt, SystemExit):
 			raise
+
+		except:
+			if self.sort:
+				# is sorting, shift error pdfs to target dir
+				errorDir = self.target_dir + "/Error_PDFs"
+				if not os.path.exists(errorDir):
+					os.makedirs(errorDir)
+				errorDir = os.path.join(errorDir, os.path.basename(f.name))
+				print "[!] Error parsing PDF, moving " + os.path.basename(f.name) + " to " + errorDir
+				os.rename(fpath, errorDir)
+			else:
+				# if not, just shift error pdf to same path dir
+				errorDir = self.path + "/Error_PDFs"
+				if not os.path.exists(errorDir):
+					os.makedirs(errorDir)
+				errorDir = os.path.join(errorDir, os.path.basename(f.name))
+				print "[!] Error parsing PDF, moving file to " + errorDir
+				os.rename(fpath, errorDir)
+
+				# fail gracefully
+				
+			pass
+			
 
 	def parse_pdf_pdfminer(self, f, fpath):
 		try:
@@ -229,6 +279,30 @@ class Parser(object):
 			self.handler.print_footer(fpath)
 		except (KeyboardInterrupt, SystemExit):
 			raise
+
+		except Exception,e:
+			print e
+			if self.sort:
+				# is sorting, shift error pdfs to target dir
+				errorDir = self.target_dir + "/Error_PDFs"
+				if not os.path.exists(errorDir):
+					os.makedirs(errorDir)
+				errorDir = os.path.join(errorDir, os.path.basename(f.name))
+				print "[!] Error parsing PDF, moving " + os.path.basename(f.name) + " to " + errorDir
+				os.rename(fpath, errorDir)
+			else:
+				# if not, just shift error pdf to same path dir
+				errorDir = self.path + "/Error_PDFs"
+				if not os.path.exists(errorDir):
+					os.makedirs(errorDir)
+				errorDir = os.path.join(errorDir, os.path.basename(f.name))
+				print "[! Error parsing PDF, moving file to " + errorDir
+				os.rename(fpath, errorDir)
+
+				
+				#fail gracefully
+			pass
+			
 
 	def parse_pdf(self, f, fpath):
 		parser_format = "parse_pdf_" + self.library
@@ -277,6 +351,7 @@ class Parser(object):
 			raise
 
 	def parse(self, path):
+
 		try:
 			if path.startswith('http://') or path.startswith('https://'):
 				if 'requests' not in IMPORTS:
@@ -296,8 +371,19 @@ class Parser(object):
 				for walk_root, walk_dirs, walk_files in os.walk(path):
 					for walk_file in fnmatch.filter(walk_files, self.ext_filter):
 						fpath = os.path.join(walk_root, walk_file)
+						if self.sort:
+							print "[*] Processing " + fpath
 						with open(fpath, 'rb') as f:
 							self.parser_func(f, fpath)
+
+						if self.sort:
+							if self.matchFound:
+								#report_year = walk_root.split(os.path.sep)[-1]
+								new_fpath = os.path.join(self.target_dir, walk_file)
+								print "[+] Matched keyword, moving " + fpath + " to " + self.target_dir
+								#move and rename files with respective year of origin to target_dir
+								os.rename(fpath, new_fpath)
+								self.matchFound = False
 				return
 
 			e = 'File path is not a file, directory or URL: %s' % (path)
