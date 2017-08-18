@@ -9,7 +9,7 @@ IOC Parser is a tool to extract indicators of compromise from security reports i
 * *-o FORMAT* Output format (csv/json/yara)
 * *-d* Deduplicate matches
 * *-l LIB* Parsing library
-" *-s SORT* Sort documents based on keywords specified in pattern file
+* *-s SORT* Sort documents based on keywords specified in pattern file
 * *-t TARGET_DIR* Target directory to sort documents to
 
 
