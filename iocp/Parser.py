@@ -77,7 +77,7 @@ except ImportError:
 	pass
 
 # Import project source files
-import iocp
+from iocp import Output
 import Output
 
 class Parser(object):
