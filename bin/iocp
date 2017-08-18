@@ -47,7 +47,13 @@ if __name__ == "__main__":
 	argparser.add_argument('-o', dest='OUTPUT_FORMAT', default='csv', help='Output format (csv/tsv/json/yara/netflow)')
 	argparser.add_argument('-d', dest='DEDUP', action='store_true', default=False, help='Deduplicate matches')
 	argparser.add_argument('-l', dest='LIB', default='pdfminer', help='PDF parsing library (pypdf2/pdfminer)')
-	args = argparser.parse_args()
+	argparser.add_argument('-t', dest='TARGET_DIR', help='Target directory to sort documents into')
+	argparser.add_argument('-s', action='store_true', default=False, dest='SORT', help='Sort documents with matching matching keywords into target directory')
 
-	parser = Parser.Parser(args.INI, args.INPUT_FORMAT, args.DEDUP, args.LIB, args.OUTPUT_FORMAT)
+	args = argparser.parse_args()
+	if args.SORT and args.TARGET_DIR is None:
+    		argparser.error("-s requires -t")
+
+	
+	parser = Parser.Parser(args.INI, args.INPUT_FORMAT, args.DEDUP, args.LIB, args.OUTPUT_FORMAT, args.SORT, args.TARGET_DIR, args.PATH)
 	parser.parse(args.PATH)
